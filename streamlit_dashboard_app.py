@@ -3,6 +3,9 @@ import streamlit as st
 import boto3
 from io import StringIO
 
+# === Streamlit Config (MUST be first) ===
+st.set_page_config(page_title="Tipping Monster Dashboard", layout="wide")
+
 # === CONFIG ===
 BUCKET = "tipping-monster-data"
 KEY = "master_subscriber_log.csv"
@@ -22,7 +25,7 @@ def load_data():
     df = pd.read_csv(StringIO(csv_string))
 
     # Strip suffixes like "_realistic" from Date and ensure proper format
-    df["Date"] = df["Date"].astype(str).str.extract(r"(\d{4}-\d{2}-\d{2})")[0]
+    df["Date"] = df["Date"].astype(str).str.extract(r"(\\d{4}-\\d{2}-\\d{2})")[0]
     df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
     df = df.dropna(subset=["Date"])
 
@@ -38,7 +41,6 @@ df['Tags'] = df['Tags'] if 'Tags' in df.columns else ''
 df['Trainer'] = df['Trainer'].astype(str) if 'Trainer' in df.columns else 'Unknown'
 
 # === Streamlit UI ===
-st.set_page_config(page_title="Tipping Monster Dashboard", layout="wide")
 st.title("🧐 Tipping Monster – ROI Dashboard")
 st.markdown("Visualise performance from past monster tips. Filter, export, analyse.")
 
@@ -97,7 +99,7 @@ st.markdown(f"""
 # === Charts ===
 st.markdown("### 📈 Points Profit Over Time")
 chart_df = filtered.groupby("Date").agg({"Profit": "sum"}).cumsum().rename(columns={"Profit": "Cumulative Profit"}).reset_index()
-chart_df["Date"] = pd.to_datetime(chart_df["Date"].dt.date)  # Strip time component if present
+chart_df["Date"] = pd.to_datetime(chart_df["Date"].dt.date)
 st.line_chart(chart_df.set_index("Date"))
 
 # === Per-Day Summary ===
