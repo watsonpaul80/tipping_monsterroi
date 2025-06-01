@@ -34,7 +34,7 @@ df['Profit'] = df['Profit'].astype(float)
 df['Best Odds'] = df['Best Odds'].astype(float)
 df['Running Profit'] = df['Running Profit'].astype(float)
 df['Running Profit Best Odds'] = df['Running Profit Best Odds'].astype(float)
-df['Tags'] = df['Tags'].astype(str) if 'Tags' in df.columns else ''
+df['Tags'] = df['Tags'] if 'Tags' in df.columns else ''
 df['Trainer'] = df['Trainer'].astype(str) if 'Trainer' in df.columns else 'Unknown'
 
 # === Streamlit UI ===
@@ -57,7 +57,7 @@ tag_options = ["NAP", "Steam", "In Form", "Light Weight"]
 selected_tags = st.sidebar.multiselect("Tip Tags", tag_options, default=tag_options)
 
 def has_selected_tags(tags, selected):
-    return any(tag.lower() in tags.lower() for tag in selected)
+    return any(tag.lower() in str(tags).lower() for tag in selected)
 
 # === Filter Data ===
 filtered = df[
