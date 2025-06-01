@@ -40,6 +40,7 @@ df['Running Profit'] = df['Running Profit'].astype(float)
 df['Running Profit Best Odds'] = df['Running Profit Best Odds'].astype(float)
 df['Tags'] = df['Tags'] if 'Tags' in df.columns else ''
 df['Trainer'] = df['Trainer'].astype(str) if 'Trainer' in df.columns else 'Unknown'
+df['Jockey'] = df['Jockey'].astype(str) if 'Jockey' in df.columns else 'Unknown'
 
 # === Streamlit UI ===
 st.title("🧐 Tipping Monster – ROI Dashboard")
