@@ -2,6 +2,7 @@ import pandas as pd
 import streamlit as st
 import boto3
 from io import StringIO
+from datetime import date
 
 # === Streamlit Config (MUST be first) ===
 st.set_page_config(page_title="Tipping Monster Dashboard", layout="wide")
@@ -25,7 +26,7 @@ def load_data():
     df = pd.read_csv(StringIO(csv_string))
 
     # Strip suffixes like "_realistic" from Date and ensure proper format
-    df["Date"] = df["Date"].astype(str).str.extract(r"(\\d{4}-\\d{2}-\\d{2})")[0]
+    df["Date"] = df["Date"].astype(str).str.extract(r"(\d{4}-\d{2}-\d{2})")[0]
     df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
     df = df.dropna(subset=["Date"])
 
@@ -48,6 +49,11 @@ st.markdown("Visualise performance from past monster tips. Filter, export, analy
 st.sidebar.header("🔍 Filters")
 min_date = df["Date"].min()
 max_date = df["Date"].max()
+
+if pd.isna(min_date):
+    min_date = pd.to_datetime(date.today())
+if pd.isna(max_date):
+    max_date = pd.to_datetime(date.today())
 
 date_range = st.sidebar.date_input("Select Date Range", [min_date, max_date], min_value=min_date, max_value=max_date)
 selected_type = st.sidebar.multiselect("Bet Type", options=df["EW/Win"].unique(), default=list(df["EW/Win"].unique()))
