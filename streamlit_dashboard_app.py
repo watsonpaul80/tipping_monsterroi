@@ -97,6 +97,7 @@ st.markdown(f"""
 # === Charts ===
 st.markdown("### 📈 Points Profit Over Time")
 chart_df = filtered.groupby("Date").agg({"Profit": "sum"}).cumsum().rename(columns={"Profit": "Cumulative Profit"}).reset_index()
+chart_df["Date"] = pd.to_datetime(chart_df["Date"].dt.date)  # Strip time component if present
 st.line_chart(chart_df.set_index("Date"))
 
 # === Per-Day Summary ===
