@@ -33,7 +33,7 @@ df['Profit'] = df['Profit'].astype(float)
 df['Best Odds'] = df['Best Odds'].astype(float)
 df['Running Profit'] = df['Running Profit'].astype(float)
 df['Running Profit Best Odds'] = df['Running Profit Best Odds'].astype(float)
-df['Tags'] = df.get('Tags', '').astype(str)
+df['Tags'] = df['Tags'].astype(str) if 'Tags' in df.columns else ''
 
 # === Streamlit UI ===
 st.set_page_config(page_title="Tipping Monster Dashboard", layout="wide")
