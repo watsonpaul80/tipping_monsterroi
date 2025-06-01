@@ -21,9 +21,10 @@ def load_data():
     csv_string = response["Body"].read().decode("utf-8")
     df = pd.read_csv(StringIO(csv_string))
 
-    df = df[df['Date'].str.len() == 10]
-    df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
-    df = df.dropna(subset=['Date'])
+    # Strip suffixes like "_realistic" from Date and ensure proper format
+    df["Date"] = df["Date"].astype(str).str.extract(r"(\d{4}-\d{2}-\d{2})")[0]
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+    df = df.dropna(subset=["Date"])
 
     return df
 
@@ -38,7 +39,7 @@ df['Trainer'] = df['Trainer'].astype(str) if 'Trainer' in df.columns else 'Unkno
 
 # === Streamlit UI ===
 st.set_page_config(page_title="Tipping Monster Dashboard", layout="wide")
-st.title("🧠 Tipping Monster – ROI Dashboard")
+st.title("🧐 Tipping Monster – ROI Dashboard")
 st.markdown("Visualise performance from past monster tips. Filter, export, analyse.")
 
 # === Sidebar Filters ===
@@ -114,4 +115,4 @@ st.dataframe(filtered.sort_values("Date", ascending=False), use_container_width=
 
 # === Download ===
 csv_download = filtered.to_csv(index=False).encode("utf-8")
-st.download_button("📥 Download CSV", csv_download, "tipping_monster_filtered.csv", "text/csv")
+st.download_button("📅 Download CSV", csv_download, "tipping_monster_filtered.csv", "text/csv")
