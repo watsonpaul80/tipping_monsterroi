@@ -76,13 +76,13 @@ if selected_trainers:
 if selected_tags:
     filtered = filtered[filtered["Tags"].apply(lambda x: has_selected_tags(x, selected_tags))]
 
-
 # === Summary Stats ===
 total_tips = len(filtered)
 total_profit = round(filtered["Profit"].sum(), 2)
 total_best_profit = round(filtered["Running Profit Best Odds"].iloc[-1], 2) if not filtered.empty else 0
 roi = round((total_profit / total_tips) * 100, 2) if total_tips > 0 else 0
 roi_best = round((total_best_profit / total_tips) * 100, 2) if total_tips > 0 else 0
+strike_rate = round((filtered["Result"] == "1").sum() / total_tips * 100, 2) if total_tips > 0 else 0
 
 st.markdown(f"""
 ### 📊 Summary  
@@ -90,7 +90,8 @@ st.markdown(f"""
 - **Profit (SP):** `{total_profit}` pts  
 - **Profit (Best Odds):** `{total_best_profit}` pts  
 - **ROI (SP):** `{roi}%`  
-- **ROI (Best Odds):** `{roi_best}%`
+- **ROI (Best Odds):** `{roi_best}%`  
+- **Strike Rate:** `{strike_rate}%`
 """)
 
 # === Charts ===
@@ -105,8 +106,10 @@ daily_summary = filtered.groupby("Date").agg({
     "Profit": "sum",
     "Best Odds": "mean",
     "Running Profit": "last",
-    "Running Profit Best Odds": "last"
-}).rename(columns={"Horse": "Tips"}).reset_index()
+    "Running Profit Best Odds": "last",
+    "Result": lambda x: (x == "1").sum()
+}).rename(columns={"Horse": "Tips", "Result": "Winners"}).reset_index()
+daily_summary["Strike Rate"] = round((daily_summary["Winners"] / daily_summary["Tips"] * 100), 2)
 st.dataframe(daily_summary, use_container_width=True)
 
 # === Telegram-Style Summary ===
@@ -114,7 +117,7 @@ st.markdown("### 📬 Telegram-Style Summary")
 for _, row in daily_summary.iterrows():
     st.markdown(f"""
     🗓️ **{row['Date'].date()}**  
-    🏇 Tips: {row['Tips']} | 💰 Profit: `{round(row['Profit'], 2)}` pts | 📈 RP: `{round(row['Running Profit'], 2)}` | 💎 BODDS RP: `{round(row['Running Profit Best Odds'], 2)}`
+    🏇 Tips: {row['Tips']} | 🥇 Wins: {row['Winners']} | 🎯 SR: `{row['Strike Rate']}%` | 💰 Profit: `{round(row['Profit'], 2)}` pts | 📈 RP: `{round(row['Running Profit'], 2)}` | 💎 BODDS RP: `{round(row['Running Profit Best Odds'], 2)}`
     """)
 
 # === Table ===
