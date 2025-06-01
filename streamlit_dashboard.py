@@ -1,73 +1,134 @@
-import streamlit as st
+import argparse
+import json
+import os
 import pandas as pd
-import matplotlib.pyplot as plt
 from pathlib import Path
-import boto3
-from botocore.exceptions import NoCredentialsError, ClientError
+from datetime import datetime
 
-st.set_page_config(page_title="Tipping Monster P&L", layout="wide")
+# === CONFIG ===
+PRED_DIR = Path("logs")
+RESULTS_DIR = Path("rpscrape/data/dates/all")
+OUTPUT_DIR = Path("logs")
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+MASTER_LOG = OUTPUT_DIR / "master_subscriber_log.csv"
 
-# === AWS S3 SETTINGS FROM STREAMLIT SECRETS ===
-secrets = st.secrets["aws"]
-bucket = secrets["bucket"]
-key = secrets["object"]
+def load_tips(date_str):
+    tips_path = PRED_DIR / f"sent_tips_{date_str}.jsonl"
+    if not tips_path.exists():
+        print(f"❌ Missing tips file: {tips_path}")
+        return []
+    with open(tips_path, "r") as f:
+        return [json.loads(line) for line in f]
 
-# Download from S3 into local file
-s3 = boto3.client(
-    "s3",
-    aws_access_key_id=secrets["aws_access_key_id"],
-    aws_secret_access_key=secrets["aws_secret_access_key"],
-    region_name=secrets["region"]
-)
+def load_results(date_str):
+    path = RESULTS_DIR / f"{date_str.replace('-', '_')}.csv"
+    if not path.exists():
+        print(f"❌ Missing results file: {path}")
+        return pd.DataFrame()
+    df = pd.read_csv(path)
+    df["course"] = df["course"].astype(str).str.strip().str.lower()
+    df["horse"] = df["horse"].astype(str).str.lower().str.replace(r" \(.*\)", "", regex=True).str.strip()
+    df["off"] = df["off"].astype(str).str.strip()
+    return df
 
-try:
-    s3.download_file(bucket, key, "master_subscriber_log.csv")
-    df = pd.read_csv("master_subscriber_log.csv")
-except NoCredentialsError:
-    st.error("\u274c AWS credentials missing or invalid.")
-    st.stop()
-except ClientError as e:
-    st.error(f"\u274c Could not download file from S3: {e}")
-    st.stop()
+def normalize(text):
+    return str(text).lower().strip().replace(" (ire)", "").replace(" (gb)", "")
 
-# === CLEAN + FILTER ===
-df['Date'] = pd.to_datetime(df['Date'])
-df = df.sort_values("Date")
+def main(date_str):
+    tips = load_tips(date_str)
+    results_df = load_results(date_str)
+    out_rows = []
+    running_profit = 0.0
+    running_best_profit = 0.0
 
-# Sidebar filters
-st.sidebar.header("\ud83d\udd0d Filters")
-all_dates = sorted(df['Date'].dt.date.unique())
-selected_dates = st.sidebar.multiselect("Date Range", all_dates, default=all_dates[-7:])
-filtered = df[df['Date'].dt.date.isin(selected_dates)]
+    for tip in tips:
+        race = tip.get("race", "??:?? Unknown")
+        try:
+            time_str, meeting = race.split(" ", 1)
+        except:
+            time_str, meeting = "??:??", "Unknown"
 
-# Summary Metrics
-st.subheader("\ud83d\udcbe Summary Stats")
-total_tips = len(filtered)
-winners = (filtered['Result'] == '1').sum()
-profit = round(filtered['Profit'].sum(), 2)
-best_profit = round(filtered['Running Profit Best Odds'].iloc[-1], 2) if not filtered.empty else 0
-stake_total = filtered['Stake'].sum()
-roi = (profit / stake_total * 100) if stake_total else 0
+        horse = tip.get("name", "Unknown")
+        trainer = tip.get("trainer", "Unknown")
+        sp = float(tip.get("bf_sp") or 0)
+        odds = float(tip.get("odds") or tip.get("bf_sp") or 0)
+        best_odds = float(tip.get("realistic_odds") or odds)
+        conf = tip.get("confidence", 0.0)
+        ew = odds >= 5.0 or tip.get("each_way", False)
+        ew_flag = "EW" if ew else "Win"
+        stake = 1.0
+        result = "NR"
+        pos = None
 
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Tips", total_tips)
-col2.metric("Winners", winners)
-col3.metric("Profit (pts)", profit)
-col4.metric("ROI %", f"{roi:.2f}%")
+        value_pct = round((odds / sp) * 100, 2) if sp else "-"
+        profit = 0.0
+        profit_best = 0.0
 
-# Line Chart – Running Profit
-df_plot = filtered.groupby("Date")["Running Profit"].max().reset_index()
-df_plot["Date"] = pd.to_datetime(df_plot["Date"])
+        # Match result
+        if not results_df.empty:
+            match = results_df[
+                (results_df["course"] == normalize(meeting)) &
+                (results_df["off"] == time_str) &
+                (results_df["horse"] == normalize(horse))
+            ]
+            if not match.empty:
+                pos_raw = match.iloc[0]["pos"]
+                try:
+                    pos = int(pos_raw)
+                    result = str(pos)
+                except:
+                    result = str(pos_raw).strip().upper()
 
-st.subheader("\ud83d\udcca Cumulative Profit Over Time")
-fig, ax = plt.subplots()
-ax.plot(df_plot["Date"], df_plot["Running Profit"], marker="o", label="Standard Odds")
-ax.set_xlabel("Date")
-ax.set_ylabel("Profit (pts)")
-ax.grid(True)
-ax.legend()
-st.pyplot(fig)
+        # Profit logic
+        if result != "NR":
+            if ew:
+                win = (sp - 1) * 0.5 if result == "1" else 0
+                place = ((sp * 0.2) - 1) * 0.5 if result.isdigit() and int(result) <= 3 else -0.5
+                profit = round(win + place, 2)
+                win_b = (best_odds - 1) * 0.5 if result == "1" else 0
+                place_b = ((best_odds * 0.2) - 1) * 0.5 if result.isdigit() and int(result) <= 3 else -0.5
+                profit_best = round(win_b + place_b, 2)
+            else:
+                profit = round((sp - 1) * stake if result == "1" else -stake, 2)
+                profit_best = round((best_odds - 1) * stake if result == "1" else -stake, 2)
 
-# Table View
-st.subheader("\ud83d\udcc4 Tips Breakdown")
-st.dataframe(filtered.sort_values(by=["Date", "Time"], ascending=[False, True]))
+        running_profit += profit
+        running_best_profit += profit_best
+
+        out_rows.append({
+            "Date": date_str,
+            "Meeting": meeting,
+            "Time": time_str,
+            "EW/Win": ew_flag,
+            "Trainer": trainer,
+            "Jockey": tip.get("jockey", "Unknown"),
+            "Horse": horse,
+            "Odds": odds,
+            "SP": sp,
+            "Value": value_pct,
+            "Result": result,
+            "Stake": stake,
+            "Profit": profit,
+            "Running Profit": round(running_profit, 2),
+            "Best Odds": best_odds,
+            "Running Profit Best Odds": round(running_best_profit, 2)
+        })
+
+    df_new = pd.DataFrame(out_rows)
+
+    if MASTER_LOG.exists():
+        df_master = pd.read_csv(MASTER_LOG)
+        df_master = df_master[~df_master['Date'].str.contains("_realistic")]
+        df_master = df_master[~((df_master['Date'] == date_str) & (df_master['Horse'].isin(df_new['Horse'])))]
+        df_master = pd.concat([df_master, df_new], ignore_index=True)
+    else:
+        df_master = df_new
+
+    df_master.to_csv(MASTER_LOG, index=False)
+    print(f"✅ Updated master log: {MASTER_LOG}")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--date", required=True, help="YYYY-MM-DD")
+    args = parser.parse_args()
+    main(args.date)
