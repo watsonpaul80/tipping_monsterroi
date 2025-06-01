@@ -95,9 +95,9 @@ st.markdown(f"""
 """)
 
 # === Charts ===
-st.markdown("### 📈 Profit Over Time")
-chart_df = filtered.groupby("Date").agg({"Profit": "sum", "Running Profit": "last", "Running Profit Best Odds": "last"}).reset_index()
-st.line_chart(chart_df.set_index("Date")[["Running Profit", "Running Profit Best Odds"]])
+st.markdown("### 📈 Points Profit Over Time")
+chart_df = filtered.groupby("Date").agg({"Profit": "sum"}).cumsum().rename(columns={"Profit": "Cumulative Profit"}).reset_index()
+st.line_chart(chart_df.set_index("Date"))
 
 # === Per-Day Summary ===
 st.markdown("### 📅 Per-Day Summary")
