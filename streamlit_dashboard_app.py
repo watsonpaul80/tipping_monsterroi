@@ -60,14 +60,22 @@ def has_selected_tags(tags, selected):
     return any(tag.lower() in str(tags).lower() for tag in selected)
 
 # === Filter Data ===
-filtered = df[
-    (df["Date"] >= pd.to_datetime(date_range[0])) &
-    (df["Date"] <= pd.to_datetime(date_range[1])) &
-    (df["EW/Win"].isin(selected_type)) &
-    (df["Jockey"].isin(selected_jockeys)) &
-    (df["Trainer"].isin(selected_trainers)) &
-    (df["Tags"].apply(lambda x: has_selected_tags(x, selected_tags)))
-]
+filtered = df.copy()
+
+if date_range:
+    filtered = filtered[
+        (filtered["Date"] >= pd.to_datetime(date_range[0])) &
+        (filtered["Date"] <= pd.to_datetime(date_range[1]))
+    ]
+if selected_type:
+    filtered = filtered[filtered["EW/Win"].isin(selected_type)]
+if selected_jockeys:
+    filtered = filtered[filtered["Jockey"].isin(selected_jockeys)]
+if selected_trainers:
+    filtered = filtered[filtered["Trainer"].isin(selected_trainers)]
+if selected_tags:
+    filtered = filtered[filtered["Tags"].apply(lambda x: has_selected_tags(x, selected_tags))]
+
 
 # === Summary Stats ===
 total_tips = len(filtered)
